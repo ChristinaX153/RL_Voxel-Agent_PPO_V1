@@ -22,14 +22,18 @@ class VoxelEnv(Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.grid = np.zeros_like(self.grid, dtype=np.int32)
-        center = self.grid_size // 2
-        self.grid[center, center, center] = 1
-        self._update_available_actions()
+        self.np_random, _ = self._np_random, None  # <- this sets up self.np_random
 
-        observation = self.grid.flatten().astype(np.int32)
-        info = {}
-        return observation, info
+        self.grid = np.zeros_like(self.grid, dtype=np.int32)
+
+        x = self.np_random.integers(0, self.grid_size)
+        y = self.np_random.integers(0, self.grid_size)
+        z = self.np_random.integers(0, self.grid_size)
+        self.grid[x, y, z] = 1
+
+        self._update_available_actions()
+        return self.grid.flatten().astype(np.int32), {}
+
 
     def step(self, action_idx):
         x, y, z = self.available_actions[action_idx]
