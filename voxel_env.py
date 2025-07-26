@@ -3,14 +3,61 @@ import os
 import json
 import torch
 from gymnasium import Env, spaces
+import requests
+import time
 
+def send_voxel(voxel_data, step=None):
+    """Send voxel data to the combined server with step number"""
+    url = "http://localhost:5555/agent/send_voxel"
+    payload = {
+        "data": voxel_data,
+        "step": step
+    }
+    try:
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print(f"Voxel data sent successfully for step {step}")
+        else:
+            print(f"Failed to send voxel data: {response.status_code}")
+    except Exception as e:
+        print(f"Error sending voxel data: {e}")
+
+def wait_for_reward(step, timeout=30):
+    """Wait for reward from Grasshopper for a specific step"""
+    url = "http://localhost:5555/agent/get_reward"
+    start_time = time.time()
+    
+    while (time.time() - start_time) < timeout:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                reward_data = response.json()
+                if reward_data.get("status") == "success":
+                    reward_info = reward_data.get("reward", {})
+                    reward_step = reward_info.get("step")
+                    
+                    # Check if this reward is for the current step
+                    if reward_step == step:
+                        reward_value = reward_info.get("reward")
+                        print(f"Received reward {reward_value} for step {step}")
+                        return True
+            
+            time.sleep(0.1)  # Wait 100ms before checking again
+            
+        except Exception as e:
+            print(f"Error checking for reward: {e}")
+            time.sleep(0.1)
+    
+    return False
 
 class VoxelEnv(Env):
-    def __init__(self, grid_size=5, device=None):
+    def __init__(self, session=None, grid_size=5, device=None):
         super(VoxelEnv, self).__init__()
         self.grid_size = grid_size
         self.device = device if device is not None else ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.grid = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
+        # self.grid = np.zeros((grid_size, grid_size, grid_size), dtype=np.int32)
+        self.current_step = 0  # Add step tracking
+        self.reset(seed=420)
 
         self.action_space = spaces.Discrete(1)
         self.observation_space = spaces.Box(
@@ -21,12 +68,13 @@ class VoxelEnv(Env):
 
         self.available_actions = []
         self.timeouts = 0
+        # session parameter is kept for compatibility but not used in sync version
 
     def reset(self, seed=None):
         super().reset(seed=seed)
-        self.grid = np.zeros_like(self.grid, dtype=np.int32)
-        center = self.grid_size // 2
-        self.grid[center, center, center] = 1
+        self.grid = np.zeros((self.grid_size, self.grid_size, self.grid_size), dtype=np.int32)
+        self.grid[np.random.randint(0, self.grid_size), np.random.randint(0, self.grid_size), np.random.randint(0, self.grid_size)] = 1
+        self.current_step = 0  # Reset step counter
         self._update_available_actions()
 
         observation = self.grid.flatten().astype(np.float32)  # Changed to float32
@@ -35,7 +83,15 @@ class VoxelEnv(Env):
 
     def step(self, action_idx):
         x, y, z = self.available_actions[action_idx]
-        reward = self._calculate_reward(x, y, z)
+        
+        # Send voxel data with current step
+        send_voxel(self.grid.tolist(), step=self.current_step)
+        
+        # Calculate reward (which will wait for external reward)
+        reward = self._calculate_reward(x, y, z, step=self.current_step)
+        
+        # Increment step counter for next iteration
+        self.current_step += 1
 
         self._update_available_actions()
 
@@ -127,16 +183,30 @@ class VoxelEnv(Env):
         unique_positions = set(map(tuple, empty_neighbors))
         self.available_actions = list(unique_positions)
 
-    def _calculate_reward(self, x, y, z):
+    def _calculate_reward(self, x, y, z, step=None):
         if self.grid[x, y, z] == 0:
             self.grid[x, y, z] = 1
-            self._write_grid_to_temp_file()
-            return self._wait_for_external_reward()
+            
+            # Wait for reward from external system (Grasshopper)
+            if step is not None:
+                print(f"Waiting for external reward for step {step}")
+                reward_received = wait_for_reward(step, timeout=30)
+                if reward_received:
+                    # The actual reward value would be retrieved from the server
+                    # For now, return a positive reward for successful placement
+                    return 1.0
+                else:
+                    print(f"No external reward received for step {step}, using default")
+                    return 0.5  # Default positive reward
+            else:
+                # Fallback to simple neighbor-based reward if no step provided
+                neighbor_count = self._count_neighbors(x, y, z)
+                return 0.5 + (neighbor_count * 0.1)
         else:
             return -0.2
 
-    def _write_grid_to_temp_file(self):
-        export_voxel_grid(self.grid, "temp_voxel_input.json")
+    # def _write_grid_to_temp_file(self):
+    #     export_voxel_grid(self.grid, "temp_voxel_input.json")
 
     def _wait_for_external_reward(self, timeout=10):
         import time
@@ -183,10 +253,11 @@ def export_voxel_grid(grid, filename):
 
 class VectorizedVoxelEnv:
     """Vectorized wrapper for multiple VoxelEnv instances"""
-    def __init__(self, num_envs=8, grid_size=5, device=None):
+    def __init__(self, session=None, num_envs=8, grid_size=5, device=None):
+        # session parameter kept for compatibility
         self.num_envs = num_envs
         self.device = device if device is not None else ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.envs = [VoxelEnv(grid_size=grid_size, device=self.device) for _ in range(num_envs)]
+        self.envs = [VoxelEnv(session=None, grid_size=grid_size, device=self.device) for _ in range(num_envs)]
         
         # Use the action/observation space from the first env
         self.action_space = self.envs[0].action_space

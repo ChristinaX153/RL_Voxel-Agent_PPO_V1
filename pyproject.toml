@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.12.14",
     "stable-baselines3[extra]>=2.6.0",
     "tensorboard>=2.20.0",
     "torch",
