@@ -24,6 +24,7 @@ parser.add_argument('--new', action='store_true', default=False, help='Start a n
 parser.add_argument('--n_envs', type=int, default=1, help='Number of parallel environments (default: 1)')
 parser.add_argument('--grid', type=int, default=5, help='Grid size (default: 5)')
 parser.add_argument('--chk_freq', type=int, default=100, help='Frequency of saving checkpoints (default: 100)')
+parser.add_argument('--paneling_weight', type=float, default=1.0, help='Weight for paneling cost reward')
 args = parser.parse_args()
 
 # ---------------------------
@@ -46,7 +47,12 @@ def mask_fn(env: VoxelEnv):
 def make_single_env(rank: int = 0):
     def _thunk():
         # give each env a unique port if you scale n_envs
-        e = VoxelEnv(port=args.port + rank, grid_size=args.grid, device='cpu')
+        e = VoxelEnv(
+            port=args.port + rank,
+            grid_size=args.grid,
+            device='cpu',
+            paneling_weight=args.paneling_weight  # Pass the new arg
+        )
         # wrap with the ActionMasker so the policy only samples valid actions
         return ActionMasker(e, mask_fn)
     return _thunk

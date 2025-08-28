@@ -22,7 +22,7 @@ class VoxelEnv(Env):
 
     Where N = grid_size ** 3
     """
-    def __init__(self, port, grid_size=5, device=None, max_steps=200, cooldown_steps=3, step_penalty=0.0):
+    def __init__(self, port, grid_size=5, device=None, max_steps=200, cooldown_steps=3, step_penalty=0.0, paneling_weight=1.0):
         super(VoxelEnv, self).__init__()
         self.grid_size = grid_size
         self.device = device if device is not None else ('cuda' if torch.cuda.is_available() else 'cpu')
@@ -70,6 +70,7 @@ class VoxelEnv(Env):
             raise FileNotFoundError(f"No EPW files found in {self.epw_folder}")
 
         self.current_epw = None
+        self.paneling_weight = paneling_weight
 
     # ---------------------------
     # Utilities
@@ -178,12 +179,12 @@ class VoxelEnv(Env):
                 if d[k] <= 0:
                     del d[k]
 
-    def step(self, action_idx):
+    def step(self, action):
         # Time/bookkeeping
         self.step_count += 1
         self._tick_cooldowns()  # age cooldowns at each step
 
-        action_type, (x, y, z) = self._action_to_coords(action_idx)
+        action_type, (x, y, z) = self._action_to_coords(action)
         base_reward = 0.0
 
         if action_type == "noop":
@@ -230,7 +231,19 @@ class VoxelEnv(Env):
             "epw_file": os.path.basename(self.current_epw),
             "action_masks": self.action_masks()  # keep mask up to date every step
         }
+
+        reward += self.get_paneling_cost_reward()
+
         return observation, reward, terminated, truncated, info
+
+    def get_paneling_cost_reward(self):
+        # Example: Read from file, socket, or direct calculation
+        # Replace with your actual logic to get the reward from Grasshopper
+        try:
+            with open("paneling_cost_reward.txt", "r") as f:
+                return float(f.read())
+        except Exception:
+            return 0.0
 
     def _safe_reward(self, r):
         """Coerce reward to finite float; fallback on invalid values."""
