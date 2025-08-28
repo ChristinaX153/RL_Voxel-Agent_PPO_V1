@@ -58,7 +58,7 @@ env = DummyVecEnv([make_single_env(i) for i in range(num_envs)])
 # PPO hyperparams (stable defaults)
 # ---------------------------
 num_steps = 256          # rollout length per env 
-num_epochs = 2          # PPO epochs per update
+num_epochs = 1          # PPO epochs per update
 batch_size = 64          # must divide (num_steps * num_envs); 1024*k is always divisible by 256
 
 starting_step = 0
