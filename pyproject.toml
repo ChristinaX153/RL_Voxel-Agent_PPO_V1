@@ -6,27 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "compute-rhino3d>=0.12.2",
-    "honeybee-core>=1.61.30",
-    "honeybee-radiance>=1.66.184",
-    "ladybug-geometry>=1.34.9",
-    "lbt-recipes>=0.26.23",
     "stable-baselines3[extra]>=2.6.0",
     "sb3-contrib>=2.6.0",
     "tensorboard>=2.20.0",
     "torch==2.7.0",
 ]
 
-[project.optional-dependencies]
-cpu = ["torch==2.7.0"]
 
-[tool.uv.sources]
-# Only pull torch from the CPU index
-torch = [
-  { index = "pytorch-cpu", extra = "cpu" }
-]
-
-[[tool.uv.index]]
-# The pytorch-cpu index is used to install the torch, torchvision, and torchaudio packages
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true

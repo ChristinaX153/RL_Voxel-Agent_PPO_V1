@@ -378,7 +378,7 @@ def make_single_env():
 
 num_envs = max(1, args.n_envs)
 print(f"[ENV] Creating {num_envs} environments, all connecting to Rhino.Compute coordinator on port {args.port}")
-env = DummyVecEnv([make_single_env(i) for i in range(num_envs)])
+env = DummyVecEnv([make_single_env() for i in range(num_envs)])
 env = VecMonitor(env)
 
 # Decide normalization strategy
